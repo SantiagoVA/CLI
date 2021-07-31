@@ -2,6 +2,7 @@
 
 *.env
 *.toml
+Moldy.*
 
 # Editor config
 
