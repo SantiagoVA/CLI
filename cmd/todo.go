@@ -77,23 +77,23 @@ var todoCmd = &cobra.Command{
 		if listFlg && !selectDoneFlg {
 			if len(args) == 0 {
 				for _, value := range dataInFile {
-					fmt.Printf("%v. %v: %v | DONE: %v\n", value.Id+1, value.Title, value.Description, value.Done)
+					fmt.Printf("%v. %v: %v %v\n", value.Id+1, value.Title, value.Description, checkDone(value.Done))
 				}
 			} else if args[0] == "done" || args[0] == "completed" {
 				for _, value := range dataInFile {
 					if value.Done {
-						fmt.Printf("%v. %v: %v | DONE: %v\n", value.Id+1, value.Title, value.Description, value.Done)
+						fmt.Printf("%v. %v: %v %v\n", value.Id+1, value.Title, value.Description, checkDone(value.Done))
 					}
 				}
 			} else if args[0] == "undone" || args[0] == "uncompleted" {
 				for _, value := range dataInFile {
 					if !value.Done {
-						fmt.Printf("%v. %v: %v | DONE: %v\n", value.Id+1, value.Title, value.Description, value.Done)
+						fmt.Printf("%v. %v: %v %v\n", value.Id+1, value.Title, value.Description, checkDone(value.Done))
 					}
 				}
 			} else {
 				for _, value := range dataInFile {
-					fmt.Printf("%v. %v: %v | DONE: %v\n", value.Id+1, value.Title, value.Description, value.Done)
+					fmt.Printf("%v. %v: %v %v\n", value.Id+1, value.Title, value.Description, checkDone(value.Done))
 				}
 			}
 		}
@@ -101,7 +101,7 @@ var todoCmd = &cobra.Command{
 		var titles []string
 
 		for _, value := range dataInFile {
-			titles = append(titles, fmt.Sprintf("%v. %v | DONE: %v", value.Id+1, value.Title, value.Done))
+			titles = append(titles, fmt.Sprintf("%v. %v %v", value.Id+1, value.Title, checkDone(value.Done)))
 		}
 
 		//Change the value of done to the opposite
@@ -138,6 +138,10 @@ var todoCmd = &cobra.Command{
 					colors.Info("If some value is correct only press enter in this camp and the value will be the same\n")
 					dataInFile[i].Title = terminal.BasicPrompt("Title", dataInFile[i].Title)
 					dataInFile[i].Description = terminal.BasicPrompt("Description", dataInFile[i].Description)
+					dataInFile[i].Commit = terminal.YesNoQuestion("Do you want use the commit function in this todo?")
+					if dataInFile[i].Commit {
+						dataInFile[i].Directory = terminal.BasicPrompt("Diretory to add", ".")
+					}
 					break
 				}
 			}
@@ -171,7 +175,7 @@ var todoCmd = &cobra.Command{
 			var commitTrue []string
 			for _, value := range dataInFile {
 				if value.Commit {
-					commitTrue = append(commitTrue, fmt.Sprintf("%v. %v | DONE: %v", value.Id+1, value.Title, value.Done))
+					commitTrue = append(commitTrue, fmt.Sprintf("%v. %v %v", value.Id+1, value.Title, checkDone(value.Done)))
 				}
 			}
 			selected := terminal.SelectPrompt("Select some todo that you want now do the commit", commitTrue)
@@ -227,6 +231,14 @@ func CreateData(id int) todo {
 	}
 
 	return data
+}
+
+func checkDone(isDone bool) string {
+	if !isDone {
+		return "(✗)"
+	}
+
+	return "(✓)"
 }
 
 func init() {
