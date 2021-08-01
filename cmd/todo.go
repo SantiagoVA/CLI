@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
+	"github.com/Moldy-Community/moldy/core/git"
 	"github.com/Moldy-Community/moldy/core/terminal"
 	"github.com/Moldy-Community/moldy/utils/colors"
 	"github.com/Moldy-Community/moldy/utils/functions"
@@ -15,7 +17,7 @@ import (
 )
 
 var (
-	newTodoFlg, listFlg, selectDoneFlg, editTodoFlg, deleteTodoFlg bool
+	newTodoFlg, listFlg, selectDoneFlg, editTodoFlg, deleteTodoFlg, commitOneFlg bool
 )
 
 var filename string = "Moldy.todo.json"
@@ -25,6 +27,8 @@ type todo struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Done        bool   `json:"done"`
+	Commit      bool   `json:"commit"`
+	Directory   string `json:"directory"`
 }
 
 type allData []todo
@@ -37,6 +41,9 @@ var todoCmd = &cobra.Command{
 	Example: "moldy todo new",
 	Run: func(cmd *cobra.Command, args []string) {
 		var dataInFile allData
+
+		//Create a new todo
+
 		if newTodoFlg {
 			if !ExistsFile(filename) {
 				CreateFile()
@@ -60,53 +67,88 @@ var todoCmd = &cobra.Command{
 			functions.CheckErrors(err, "2", "Error saving the new to-do", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 			colors.Success("The new todo was created successfully")
 		}
+
 		file, err := ioutil.ReadFile(filename)
 		functions.CheckErrors(err, "2", "Error reading the todo file", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 		json.Unmarshal(file, &dataInFile)
+
+		//List todos
+
 		if listFlg && !selectDoneFlg {
-			for _, value := range dataInFile {
-				fmt.Printf("%v. %v: %v | DONE %v\n", value.Id+1, value.Title, value.Description, value.Done)
+			if len(args) == 0 {
+				for _, value := range dataInFile {
+					fmt.Printf("%v. %v: %v | DONE: %v\n", value.Id+1, value.Title, value.Description, value.Done)
+				}
+			} else if args[0] == "done" || args[0] == "completed" {
+				for _, value := range dataInFile {
+					if value.Done {
+						fmt.Printf("%v. %v: %v | DONE: %v\n", value.Id+1, value.Title, value.Description, value.Done)
+					}
+				}
+			} else if args[0] == "undone" || args[0] == "uncompleted" {
+				for _, value := range dataInFile {
+					if !value.Done {
+						fmt.Printf("%v. %v: %v | DONE: %v\n", value.Id+1, value.Title, value.Description, value.Done)
+					}
+				}
+			} else {
+				for _, value := range dataInFile {
+					fmt.Printf("%v. %v: %v | DONE: %v\n", value.Id+1, value.Title, value.Description, value.Done)
+				}
 			}
 		}
 
 		var titles []string
+
 		for _, value := range dataInFile {
 			titles = append(titles, fmt.Sprintf("%v. %v | DONE: %v", value.Id+1, value.Title, value.Done))
 		}
 
+		//Change the value of done to the opposite
+
 		if selectDoneFlg {
-			selected := terminal.SelectPrompt("Select a task to mark it done", titles)
+			selected := terminal.SelectPrompt("Select a task to mark it done or undone", titles)
 			idSelected, err := strconv.Atoi(strings.Split(selected, "")[0])
 			functions.CheckErrors(err, "2", "Error changing the done value", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 			idSelected += -1
+
 			for i := 0; i < len(dataInFile); i++ {
 				if dataInFile[i].Id == idSelected {
 					dataInFile[i].Done = !dataInFile[i].Done
+					break
 				}
 			}
+
 			dataBytes, err := json.Marshal(dataInFile)
 			functions.CheckErrors(err, "2", "Error changing the done value", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 			err = ioutil.WriteFile(filename, dataBytes, 0644)
 			functions.CheckErrors(err, "2", "Error changing the done value", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 		}
 
+		//Edit a todo
+
 		if editTodoFlg {
 			selected := terminal.SelectPrompt("Select some task to edit", titles)
 			idSelected, err := strconv.Atoi(strings.Split(selected, "")[0])
-			functions.CheckErrors(err, "2", "Error changing the done value", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
+			functions.CheckErrors(err, "2", "Error changing the todos values", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 			idSelected += -1
+
 			for i := 0; i < len(dataInFile); i++ {
 				if dataInFile[i].Id == idSelected {
 					colors.Info("If some value is correct only press enter in this camp and the value will be the same\n")
 					dataInFile[i].Title = terminal.BasicPrompt("Title", dataInFile[i].Title)
 					dataInFile[i].Description = terminal.BasicPrompt("Description", dataInFile[i].Description)
+					break
 				}
 			}
+
 			dataBytes, err := json.Marshal(dataInFile)
-			functions.CheckErrors(err, "2", "Error changing the done value", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
+			functions.CheckErrors(err, "2", "Error changing the todo values", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 			err = ioutil.WriteFile(filename, dataBytes, 0644)
-			functions.CheckErrors(err, "2", "Error changing the done value", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
+			functions.CheckErrors(err, "2", "Error changing the todos values", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 		}
+
+		//Delete one todo
 
 		if deleteTodoFlg {
 			selected := terminal.SelectPrompt("Select some task to delete", titles)
@@ -121,6 +163,38 @@ var todoCmd = &cobra.Command{
 			functions.CheckErrors(err, "2", "Error changing the done value", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
 			err = ioutil.WriteFile(filename, dataBytes, 0644)
 			functions.CheckErrors(err, "2", "Error changing the done value", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
+		}
+
+		//Commit a todo
+
+		if commitOneFlg {
+			var commitTrue []string
+			for _, value := range dataInFile {
+				if value.Commit {
+					commitTrue = append(commitTrue, fmt.Sprintf("%v. %v | DONE: %v", value.Id+1, value.Title, value.Done))
+				}
+			}
+			selected := terminal.SelectPrompt("Select some todo that you want now do the commit", commitTrue)
+			idSelected, err := strconv.Atoi(strings.Split(selected, "")[0])
+			functions.CheckErrors(err, "2", "Error making the commit", "Try again and if the problem persist leave the issue in github.com/Moldy-community/moldy")
+			idSelected += -1
+
+			for _, value := range dataInFile {
+				if value.Id == idSelected {
+					if git.IsInstalled("git") {
+						execCmd := exec.Command("git", "add", value.Directory)
+						err := execCmd.Run()
+						functions.CheckErrors(err, "Code 2", "Error adding the files to stage", "Report the error on github or retry the command with new permmisions")
+						execCmd = exec.Command("git", "commit", "-m", fmt.Sprintf("'%v: %v'", value.Title, value.Description))
+						err = execCmd.Run()
+						functions.CheckErrors(err, "Code 2", "Error doing the commit", "Report the error on github or retry the command with new permmisions")
+						colors.Success("Success commited")
+					} else {
+						colors.Error("Install git before do this command")
+					}
+					break
+				}
+			}
 		}
 	},
 }
@@ -145,7 +219,13 @@ func CreateData(id int) todo {
 		Title:       terminal.BasicPrompt("Title", ""),
 		Description: terminal.BasicPrompt("Description", ""),
 		Done:        false,
+		Commit:      terminal.YesNoQuestion("Do you want use the commit function in this todo?"),
 	}
+
+	if data.Commit {
+		data.Directory = terminal.BasicPrompt("Diretory to add", ".")
+	}
+
 	return data
 }
 
@@ -156,4 +236,5 @@ func init() {
 	todoCmd.Flags().BoolVarP(&selectDoneFlg, "select", "s", false, "Select a task to mark it done or undone")
 	todoCmd.Flags().BoolVarP(&editTodoFlg, "edit", "e", false, "Change values of a todo")
 	todoCmd.Flags().BoolVarP(&deleteTodoFlg, "delete", "d", false, "Delete a todo")
+	todoCmd.Flags().BoolVarP(&commitOneFlg, "commit", "c", false, "Commit one todo")
 }
